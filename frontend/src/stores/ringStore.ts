@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { db } from '../utils/db';
 import { uid } from '../utils/id';
-import { toPlain } from '../utils/plain';
+import { toPlain, toPlainList } from '../utils/plain';
 import type { BirdAge, RingRecord, RingStatus } from '../types/ring-record';
 
 export interface RingInput {
@@ -85,6 +85,45 @@ export const useRingStore = defineStore('ring', {
       this.rings = [record, ...this.rings];
       this.duplicateId = '';
       return { record };
+    },
+
+    /**
+     * 批量写入环志记录（批量录入确认后一次性提交）。
+     * 整批包在同一个 IndexedDB 事务里：任一条落库失败都会整体回滚，不会留下半批数据。
+     * 事务内再查一次环号，防止预览后、提交前有新记录写入造成初捕撞车。
+     */
+    async bulkAddRings(inputs: RingInput[]): Promise<{ records: RingRecord[] }> {
+      const records: RingRecord[] = inputs.map((input) => ({
+        id: uid('ring'),
+        ringNo: input.ringNo.trim(),
+        colorRing: input.colorRing || '无',
+        speciesCn: input.speciesCn.trim(),
+        speciesSci: input.speciesSci.trim(),
+        age: input.age,
+        ringDate: input.ringDate ?? new Date().toISOString(),
+        netNo: input.netNo.trim(),
+        netRound: Number(input.netRound) || 1,
+        status: input.status,
+        ringer: input.ringer.trim(),
+        siteId: input.siteId,
+        sessionId: input.sessionId,
+        remark: input.remark?.trim() || undefined,
+      }));
+
+      await db.transaction('rw', db.rings, async () => {
+        for (const record of records) {
+          if (record.status === '初捕') {
+            const collided = await db.rings.where('ringNo').equals(record.ringNo).first();
+            if (collided) {
+              throw new Error(`环号 ${record.ringNo} 已被其他记录占用（${collided.speciesCn}），整批已取消，未写入任何数据`);
+            }
+          }
+        }
+        await db.rings.bulkPut(toPlainList(records));
+      });
+
+      this.rings = [...records, ...this.rings].sort((a, b) => b.ringDate.localeCompare(a.ringDate));
+      return { records };
     },
 
     async updateRing(id: string, patch: Partial<RingInput>) {
