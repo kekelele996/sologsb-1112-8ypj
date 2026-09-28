@@ -6,6 +6,7 @@ import FilterBar from '../components/common/FilterBar.vue';
 import EmptyPanel from '../components/common/EmptyPanel.vue';
 import RingCodeInput from '../components/common/RingCodeInput.vue';
 import SpeciesPicker from '../components/common/SpeciesPicker.vue';
+import BatchRingEntry from '../components/common/BatchRingEntry.vue';
 import { useRingStore } from '../stores/ringStore';
 import { useSiteStore } from '../stores/siteStore';
 import { useSessionStore } from '../stores/sessionStore';
@@ -23,6 +24,7 @@ const editingId = ref('');
 const formRef = ref<FormInstance>();
 const historyVisible = ref(false);
 const historyRingNo = ref('');
+const batchVisible = ref(false);
 
 interface RingForm {
   ringNo: string;
@@ -187,10 +189,11 @@ const historyRows = computed(() => ringStore.historyOf(historyRingNo.value));
 <template>
   <div>
     <h2 class="page-title">环志记录录入与检索</h2>
-    <p class="page-desc">金属环号 + 彩环组合双段录入，自动查重；环号重复时提示已存在并跳转该环号历史记录。</p>
+    <p class="page-desc">金属环号 + 彩环组合双段录入，自动查重；环号重复时提示已存在并跳转该环号历史记录。支持粘贴制表符表格批量补录，按行预览校验后整批写入。</p>
 
     <div class="toolbar">
       <el-button type="primary" @click="openCreate">登记环志记录</el-button>
+      <el-button type="primary" plain @click="batchVisible = true">批量录入</el-button>
       <el-tag v-if="ringStore.duplicate" type="warning" effect="plain">
         查重命中：{{ ringStore.duplicate.ringNo }}（{{ ringStore.duplicate.speciesCn }}）
       </el-tag>
@@ -322,6 +325,8 @@ const historyRows = computed(() => ringStore.historyOf(historyRingNo.value));
         <el-button type="primary" @click="historyVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <BatchRingEntry v-model="batchVisible" />
   </div>
 </template>
 
